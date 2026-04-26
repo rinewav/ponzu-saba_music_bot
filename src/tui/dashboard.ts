@@ -16,6 +16,7 @@ export class Dashboard {
       smartCSR: true,
       title: 'ぽん酢鯖専用音楽ボット - るんるんぽぽび プロセスダッシュボード',
       fullUnicode: true,
+      terminal: process.platform === 'win32' ? 'windows-256color' : undefined,
     });
 
     this.buildLayout();
@@ -132,7 +133,11 @@ export class Dashboard {
         lines += '  {gray-fg}ログなし{/gray-fg}\n';
       }
 
-      this.instanceBoxes[i].setContent(lines);
+      try {
+        this.instanceBoxes[i].setContent(lines);
+      } catch {
+        this.instanceBoxes[i].setContent(lines.replace(/\{[^}]+\}/g, ''));
+      }
     }
 
     this.screen.render();
