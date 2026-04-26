@@ -22,44 +22,6 @@
 - Node.js 20+
 - **システムバイナリ**: `yt-dlp`, `ffmpeg`（PATH に設定済みであること）
 
-## セットアップ
-
-```bash
-git clone <repo-url> && cd runrunpomi
-npm install
-```
-
-`.env` を作成:
-
-```env
-GUILD_ID=あなたのサーバーID
-BOT_1_TOKEN=ボット1のトークン
-BOT_2_TOKEN=ボット2のトークン  # 省略可
-# BOT_3_TOKEN ... BOT_5_TOKEN
-BOT_1_NAME=1号機  # 省略可、TUIの表示名
-```
-
-## 使い方
-
-```bash
-# ビルド
-npm run build
-
-# TUI ダッシュボード起動（マルチインスタンス管理）
-npm start
-
-# 開発モード（単体ボット、BOT_1_TOKENを使用）
-npm run bot
-```
-
-### TUI キーボード操作
-
-| キー     | 操作                     |
-| -------- | ------------------------ |
-| `1`〜`5` | 指定インスタンスを再起動 |
-| `S`      | 全インスタンスを停止     |
-| `Q`      | 終了                     |
-
 ## プロジェクト構成
 
 ```
