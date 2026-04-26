@@ -15,41 +15,43 @@ jobs:
       GIT_TERMINAL_PROMPT: 0
     steps:
       - name: Pull latest code
-        shell: bash
+        shell: pwsh
         run: |
-          cd "$BOT_DIR"
-          git fetch "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" main
+          cd $env:BOT_DIR
+          $token = "${{ secrets.GITHUB_TOKEN }}"
+          $repo = "${{ github.repository }}"
+          git fetch "https://x-access-token:${token}@github.com/${repo}.git" main
           git reset --hard origin/main
 
       - name: Stop Bot (release file locks)
         continue-on-error: true
-        shell: bash
+        shell: pwsh
         run: pm2 stop runrunpomi
 
       - name: Wait for process cleanup
-        shell: bash
-        run: sleep 3
+        shell: pwsh
+        run: Start-Sleep -Seconds 3
 
       - name: Install dependencies
-        shell: bash
+        shell: pwsh
         run: |
-          cd "$BOT_DIR"
+          cd $env:BOT_DIR
           npm install --ignore-scripts
 
       - name: Type check
-        shell: bash
+        shell: pwsh
         run: |
-          cd "$BOT_DIR"
+          cd $env:BOT_DIR
           npm run typecheck
 
       - name: Build
-        shell: bash
+        shell: pwsh
         run: |
-          cd "$BOT_DIR"
+          cd $env:BOT_DIR
           npm run build
 
       - name: Start Bot
-        shell: bash
+        shell: pwsh
         run: |
-          cd "$BOT_DIR"
+          cd $env:BOT_DIR
           pm2 start ecosystem.config.cjs --env production
