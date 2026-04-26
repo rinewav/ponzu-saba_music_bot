@@ -15,9 +15,9 @@ jobs:
       GIT_TERMINAL_PROMPT: 0
     steps:
       - name: Pull latest code
-        shell: pwsh
+        shell: powershell
         run: |
-          cd $env:BOT_DIR
+          Set-Location $env:BOT_DIR
           $token = "${{ secrets.GITHUB_TOKEN }}"
           $repo = "${{ github.repository }}"
           git fetch "https://x-access-token:${token}@github.com/${repo}.git" main
@@ -25,33 +25,33 @@ jobs:
 
       - name: Stop Bot (release file locks)
         continue-on-error: true
-        shell: pwsh
+        shell: powershell
         run: pm2 stop runrunpomi
 
       - name: Wait for process cleanup
-        shell: pwsh
+        shell: powershell
         run: Start-Sleep -Seconds 3
 
       - name: Install dependencies
-        shell: pwsh
+        shell: powershell
         run: |
-          cd $env:BOT_DIR
+          Set-Location $env:BOT_DIR
           npm install --ignore-scripts
 
       - name: Type check
-        shell: pwsh
+        shell: powershell
         run: |
-          cd $env:BOT_DIR
+          Set-Location $env:BOT_DIR
           npm run typecheck
 
       - name: Build
-        shell: pwsh
+        shell: powershell
         run: |
-          cd $env:BOT_DIR
+          Set-Location $env:BOT_DIR
           npm run build
 
       - name: Start Bot
-        shell: pwsh
+        shell: powershell
         run: |
-          cd $env:BOT_DIR
+          Set-Location $env:BOT_DIR
           pm2 start ecosystem.config.cjs --env production
