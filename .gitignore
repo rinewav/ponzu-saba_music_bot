@@ -1,0 +1,7 @@
+node_modules/
+dist/
+downloads/
+.env
+active_vcs_*.json
+volume_settings_*.json
+playback_state_*.json
