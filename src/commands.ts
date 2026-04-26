@@ -9,7 +9,7 @@ import {
 } from 'discord.js';
 import { AudioPlayerStatus } from '@discordjs/voice';
 import { create as createYtdlp } from 'yt-dlp-exec';
-const ytdlp = createYtdlp('yt-dlp');
+const ytdlp = createYtdlp(process.env.YTDLP_PATH || 'yt-dlp');
 const ytdlpExec = ytdlp.exec;
 import type { ServerQueue, Song } from './types.js';
 import { queue, volumeSettings, saveVolumeSettings, clearPlaybackState } from './state.js';

@@ -5,3 +5,4 @@ downloads/
 active_vcs_*.json
 volume_settings_*.json
 playback_state_*.json
+.DS_Store

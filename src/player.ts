@@ -30,7 +30,11 @@ export function setStatusCallback(cb: StatusCallback): void {
 
 function killStreamProcess(sq: ServerQueue): void {
   if (sq.streamProcess && !sq.streamProcess.killed) {
-    sq.streamProcess.kill('SIGKILL');
+    try {
+      sq.streamProcess.kill('SIGKILL');
+    } catch {
+      sq.streamProcess.kill();
+    }
     sq.streamProcess = null;
   }
 }
@@ -474,7 +478,11 @@ export async function gracefulShutdown(): Promise<void> {
     if (sq.progressInterval) clearInterval(sq.progressInterval);
     if (sq.lyricsInterval) clearInterval(sq.lyricsInterval);
     if (sq.streamProcess && !sq.streamProcess.killed) {
-      sq.streamProcess.kill('SIGKILL');
+      try {
+        sq.streamProcess.kill('SIGKILL');
+      } catch {
+        sq.streamProcess.kill();
+      }
     }
     if (sq.nowPlayingMessage) {
       await sq.nowPlayingMessage.delete().catch(() => {});

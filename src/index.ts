@@ -205,7 +205,11 @@ function startBot(config: BotConfig, guild: string, instanceIdx: number): void {
           if (serverQueue.progressInterval) clearInterval(serverQueue.progressInterval);
           if (serverQueue.lyricsInterval) clearInterval(serverQueue.lyricsInterval);
           if (serverQueue.streamProcess && !serverQueue.streamProcess.killed) {
-            serverQueue.streamProcess.kill('SIGKILL');
+            try {
+              serverQueue.streamProcess.kill('SIGKILL');
+            } catch {
+              serverQueue.streamProcess.kill();
+            }
           }
           for (const song of serverQueue.songs) {
             if (song.filePath && fs.existsSync(song.filePath)) {
@@ -224,7 +228,11 @@ function startBot(config: BotConfig, guild: string, instanceIdx: number): void {
     if (!botChannel) return;
     if (botChannel.members.filter(m => !m.user.bot).size === 0) {
       if (serverQueue.streamProcess && !serverQueue.streamProcess.killed) {
-        serverQueue.streamProcess.kill('SIGKILL');
+        try {
+          serverQueue.streamProcess.kill('SIGKILL');
+        } catch {
+          serverQueue.streamProcess.kill();
+        }
       }
       serverQueue.connection.destroy();
       if (serverQueue.textChannel) {
@@ -258,6 +266,12 @@ if (isChildProcess) {
     await gracefulShutdown();
     process.exit(0);
   });
+  if (process.platform === 'win32') {
+    process.on('SIGHUP', async () => {
+      await gracefulShutdown();
+      process.exit(0);
+    });
+  }
 } else {
   dotenv.config();
   const token = process.env.BOT_1_TOKEN;
@@ -276,4 +290,10 @@ if (isChildProcess) {
     await gracefulShutdown();
     process.exit(0);
   });
+  if (process.platform === 'win32') {
+    process.on('SIGHUP', async () => {
+      await gracefulShutdown();
+      process.exit(0);
+    });
+  }
 }

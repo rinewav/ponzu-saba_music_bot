@@ -11,39 +11,45 @@ jobs:
   deploy:
     runs-on: self-hosted
     env:
-      BOT_DIR: F:\git\musicbot\bot
+      BOT_DIR: ${{ secrets.BOT_DIR }}
       GIT_TERMINAL_PROMPT: 0
     steps:
       - name: Pull latest code
-        working-directory: ${{ env.BOT_DIR }}
+        shell: bash
         run: |
-          $token = "${{ secrets.GITHUB_TOKEN }}"
-          $repo = "${{ github.repository }}"
-          git fetch "https://x-access-token:${token}@github.com/${repo}.git" main
+          cd "$BOT_DIR"
+          git fetch "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" main
           git reset --hard origin/main
-        shell: powershell
 
       - name: Stop Bot (release file locks)
         continue-on-error: true
+        shell: bash
         run: pm2 stop runrunpomi
-        shell: powershell
 
       - name: Wait for process cleanup
-        run: Start-Sleep -Seconds 3
-        shell: powershell
+        shell: bash
+        run: sleep 3
 
       - name: Install dependencies
-        working-directory: ${{ env.BOT_DIR }}
-        run: npm install --ignore-scripts
+        shell: bash
+        run: |
+          cd "$BOT_DIR"
+          npm install --ignore-scripts
 
       - name: Type check
-        working-directory: ${{ env.BOT_DIR }}
-        run: npm run typecheck
+        shell: bash
+        run: |
+          cd "$BOT_DIR"
+          npm run typecheck
 
       - name: Build
-        working-directory: ${{ env.BOT_DIR }}
-        run: npm run build
+        shell: bash
+        run: |
+          cd "$BOT_DIR"
+          npm run build
 
       - name: Start Bot
-        working-directory: ${{ env.BOT_DIR }}
-        run: pm2 start ecosystem.config.cjs --env production
+        shell: bash
+        run: |
+          cd "$BOT_DIR"
+          pm2 start ecosystem.config.cjs --env production
