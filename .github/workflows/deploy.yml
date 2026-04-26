@@ -1,0 +1,49 @@
+name: Deploy Discord Bot
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    env:
+      BOT_DIR: F:\git\musicbot\bot
+      GIT_TERMINAL_PROMPT: 0
+    steps:
+      - name: Pull latest code
+        working-directory: ${{ env.BOT_DIR }}
+        run: |
+          $token = "${{ secrets.GITHUB_TOKEN }}"
+          $repo = "${{ github.repository }}"
+          git fetch "https://x-access-token:${token}@github.com/${repo}.git" main
+          git reset --hard origin/main
+        shell: powershell
+
+      - name: Stop Bot (release file locks)
+        continue-on-error: true
+        run: pm2 stop ponzubot
+        shell: powershell
+
+      - name: Wait for process cleanup
+        run: Start-Sleep -Seconds 3
+        shell: powershell
+
+      - name: Install dependencies
+        working-directory: ${{ env.BOT_DIR }}
+        run: npm install --ignore-scripts
+
+      - name: Type check
+        working-directory: ${{ env.BOT_DIR }}
+        run: npm run typecheck
+
+      - name: Deploy commands
+        working-directory: ${{ env.BOT_DIR }}
+        run: npm run deploy
+
+      - name: Start Bot
+        working-directory: ${{ env.BOT_DIR }}
+        run: pm2 restart ecosystem.config.cjs --env production
