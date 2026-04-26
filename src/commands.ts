@@ -113,7 +113,7 @@ async function searchAndQueue(
 
     if (isUrl && (query.includes('playlist') || query.includes('list='))) {
       const output = await ytdlpExec(query, { dumpJson: true, flatPlaylist: true });
-      searchResults = output.stdout.split('\n').filter(Boolean).map((line: string) => JSON.parse(line));
+      searchResults = output.stdout.split(/\r?\n/).filter(Boolean).map((line: string) => JSON.parse(line));
     } else if (isUrl) {
       const videoInfo = await ytdlp(query, { dumpJson: true });
       searchResults.push(videoInfo);
@@ -124,7 +124,7 @@ async function searchAndQueue(
         noWarnings: true,
         print: '%(.{title,duration_string,uploader,webpage_url,id,duration})j',
       } as Record<string, unknown>);
-      searchResults = output.stdout.split('\n').filter(Boolean).map((line: string) => JSON.parse(line));
+      searchResults = output.stdout.split(/\r?\n/).filter(Boolean).map((line: string) => JSON.parse(line));
     }
 
     if (searchResults.length === 0) {
