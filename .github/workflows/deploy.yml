@@ -25,7 +25,7 @@ jobs:
 
       - name: Stop Bot (release file locks)
         continue-on-error: true
-        run: pm2 stop ponzubot
+        run: pm2 stop runrunpomi
         shell: powershell
 
       - name: Wait for process cleanup
@@ -40,10 +40,10 @@ jobs:
         working-directory: ${{ env.BOT_DIR }}
         run: npm run typecheck
 
-      - name: Deploy commands
+      - name: Build
         working-directory: ${{ env.BOT_DIR }}
-        run: npm run deploy
+        run: npm run build
 
       - name: Start Bot
         working-directory: ${{ env.BOT_DIR }}
-        run: pm2 restart ecosystem.config.cjs --env production
+        run: pm2 start ecosystem.config.cjs --env production

@@ -8,7 +8,8 @@
     "start": "node dist/manager.js",
     "dev": "tsx src/manager.ts",
     "bot": "tsx src/index.ts",
-    "unregister": "tsx src/scripts/unregister_commands.ts"
+    "unregister": "tsx src/scripts/unregister_commands.ts",
+    "typecheck": "tsc --noEmit"
   },
   "keywords": [],
   "author": "",
