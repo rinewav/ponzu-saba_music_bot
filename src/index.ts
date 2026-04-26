@@ -21,8 +21,9 @@ import { setStatusCallback, playSong, gracefulShutdown } from './player.js';
 import CustomEmbed from './lib/defaultEmbed.js';
 import dotenv from 'dotenv';
 import { create as createYtdlp } from 'yt-dlp-exec';
+dotenv.config();
 
-const ytdlp = createYtdlp('yt-dlp');
+const ytdlp = createYtdlp(process.env.YTDLP_PATH || 'yt-dlp');
 
 const isChildProcess = !!process.send;
 

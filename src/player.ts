@@ -7,7 +7,9 @@ import {
 } from '@discordjs/voice';
 import type { Guild, TextChannel, ChatInputCommandInteraction, StringSelectMenuInteraction, GuildMember } from 'discord.js';
 import { create as createYtdlp } from 'yt-dlp-exec';
-const ytdlpExec = createYtdlp('yt-dlp').exec;
+import dotenv from 'dotenv';
+dotenv.config();
+const ytdlpExec = createYtdlp(process.env.YTDLP_PATH || 'yt-dlp').exec;
 import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
