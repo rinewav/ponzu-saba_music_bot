@@ -39,7 +39,7 @@ function killStreamProcess(sq: ServerQueue): void {
   }
 }
 
-async function startStreamPlayback(guild: Guild, song: Song, textChannel: TextChannel, sq: ServerQueue, isRetry: boolean): Promise<void> {
+async function startStreamPlayback(guild: Guild, song: Song, textChannel: TextChannel, sq: ServerQueue, isRetry: boolean): Promise<boolean> {
   killStreamProcess(sq);
 
   const streamArgs: Record<string, unknown> = {
@@ -50,6 +50,7 @@ async function startStreamPlayback(guild: Guild, song: Song, textChannel: TextCh
     retries: 10,
     fragmentRetries: 10,
     hlsPreferNative: true,
+    buffer: false,
   };
 
   if (isRetry) {
@@ -75,9 +76,14 @@ async function startStreamPlayback(guild: Guild, song: Song, textChannel: TextCh
   sq.currentMode = 'ストリーミング';
   sq.player.play(resource);
 
+  if (streamProcess.stderr) {
+    streamProcess.stderr.on('data', () => {});
+  }
+
   sendToParent({ type: 'status', status: 'playing', detail: song.title });
   onStatusChange?.(true, song.title);
   savePlaybackState(guild.id, song.url, song.title, textChannel.id);
+  return true;
 }
 
 async function playSong(guild: Guild, song: Song | undefined, textChannel: TextChannel): Promise<void> {
@@ -150,10 +156,9 @@ async function playSong(guild: Guild, song: Song | undefined, textChannel: TextC
 
   if (isLive) {
     sq.currentMode = 'ストリーミング';
-      try {
-        await startStreamPlayback(guild, song, textChannel, sq, false);
-        return;
-      } catch (streamError) {
+    try {
+      await startStreamPlayback(guild, song, textChannel, sq, false);
+    } catch (streamError) {
       console.error('ストリーミングエラー:', streamError);
       await sq.textChannel?.send({ embeds: [new CustomEmbed().setColor(0xFF0000).setTitle('❌ 再生エラー').setDescription(`「${song.title}」の再生に失敗しました。`)] });
       sq.songs.shift();
@@ -232,7 +237,7 @@ async function playSong(guild: Guild, song: Song | undefined, textChannel: TextC
       console.error('LUFSの測定に失敗しました:', (e as Error).message);
     }
   }
-  if (!song.lyrics) {
+  if (!isLive && !song.lyrics) {
     try {
       song.lyrics = await fetchAndParseLyrics(song);
     } catch (e) {
@@ -250,7 +255,9 @@ async function playSong(guild: Guild, song: Song | undefined, textChannel: TextC
     savePlaybackState(guild.id, song.url, song.title, textChannel.id);
   }
 
-  downloadWorker(sq);
+  if (!isLive) {
+    downloadWorker(sq);
+  }
 
   sq.player.removeAllListeners(AudioPlayerStatus.Idle);
   sq.player.on(AudioPlayerStatus.Idle, () => {
@@ -276,7 +283,7 @@ async function playSong(guild: Guild, song: Song | undefined, textChannel: TextC
       return;
     }
 
-    if (wasLive && sq.songs.length === 0 && !sq.isStreamReconnecting) {
+    if (wasLive && !sq.isStreamReconnecting) {
       sq.isStreamReconnecting = true;
       console.log(`ライブ配信が切断されました。5秒後に再接続します: ${finishedSong!.title}`);
       sq.textChannel?.send({ embeds: [new CustomEmbed().setColor(0xFFFF00).setDescription(`ライブ配信が切断されました。5秒後に再接続します: [${finishedSong!.title}](${finishedSong!.url})`)] }).catch(() => {});

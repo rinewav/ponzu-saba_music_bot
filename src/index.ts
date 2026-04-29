@@ -258,6 +258,12 @@ if (isChildProcess) {
       process.exit(0);
     }
   });
+  process.on('uncaughtException', (error) => {
+    console.error('未処理の例外が発生しました:', error);
+  });
+  process.on('unhandledRejection', (reason) => {
+    console.error('未処理のPromise拒否が発生しました:', reason);
+  });
   process.on('SIGINT', async () => {
     await gracefulShutdown();
     process.exit(0);
