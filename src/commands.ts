@@ -6,6 +6,7 @@ import {
   ModalBuilder,
   TextInputBuilder,
   TextInputStyle,
+  MessageFlags,
 } from 'discord.js';
 import { AudioPlayerStatus } from '@discordjs/voice';
 import { create as createYtdlp } from 'yt-dlp-exec';
@@ -13,7 +14,7 @@ const ytdlp = createYtdlp(process.env.YTDLP_PATH || 'yt-dlp');
 const ytdlpExec = ytdlp.exec;
 import type { ServerQueue, Song } from './types.js';
 import { queue, volumeSettings, saveVolumeSettings, clearPlaybackState } from './state.js';
-import { processSongs } from './player.js';
+import { processSongs, type VideoData } from './player.js';
 import { createPlayerControlButtons, createNowPlayingEmbed } from './ui.js';
 import CustomEmbed from './lib/defaultEmbed.js';
 import type {
@@ -163,7 +164,7 @@ async function searchAndQueue(
         });
       }
     } else {
-      await processSongs(interaction as ChatInputCommandInteraction, searchResults as Song[]);
+      await processSongs(interaction as ChatInputCommandInteraction, searchResults as VideoData[]);
     }
   } catch (e) {
     console.error(e);
@@ -184,7 +185,7 @@ export async function handleSkip(
   serverQueue: ServerQueue | undefined,
 ): Promise<void> {
   if (!serverQueue || serverQueue.songs.length === 0) {
-    await interaction.reply({ embeds: [new CustomEmbed().setDescription('スキップする曲がありません。')], ephemeral: true });
+    await interaction.reply({ embeds: [new CustomEmbed().setDescription('スキップする曲がありません。')], flags: MessageFlags.Ephemeral });
     return;
   }
   serverQueue.player.stop();
@@ -196,7 +197,7 @@ export async function handleStop(
   serverQueue: ServerQueue | undefined,
 ): Promise<void> {
   if (!serverQueue) {
-    await interaction.reply({ embeds: [new CustomEmbed().setDescription('再生中の曲はありません。')], ephemeral: true });
+    await interaction.reply({ embeds: [new CustomEmbed().setDescription('再生中の曲はありません。')], flags: MessageFlags.Ephemeral });
     return;
   }
   if (serverQueue.progressInterval) clearInterval(serverQueue.progressInterval);
@@ -232,7 +233,7 @@ export async function handleQueue(
   serverQueue: ServerQueue | undefined,
 ): Promise<void> {
   if (!serverQueue || serverQueue.songs.length === 0) {
-    await interaction.reply({ embeds: [new CustomEmbed().setDescription('キューは空です。')], ephemeral: true });
+    await interaction.reply({ embeds: [new CustomEmbed().setDescription('キューは空です。')], flags: MessageFlags.Ephemeral });
     return;
   }
 
@@ -267,7 +268,8 @@ export async function handleQueue(
   const embed = generateQueueEmbed(serverQueue.songs);
   const selectMenu = generateSelectMenu(serverQueue.songs.slice(0, 25));
   const components = selectMenu ? [selectMenu] : [];
-  const message = await interaction.reply({ embeds: [embed], components, fetchReply: true });
+  await interaction.reply({ embeds: [embed], components });
+  const message = await interaction.fetchReply();
   const collector = message.createMessageComponentCollector({ componentType: ComponentType.StringSelect, time: 60000 });
   collector.on('collect', async i => {
     if (i.customId === 'remove-from-queue') {
@@ -291,7 +293,7 @@ export async function handleQueue(
       const newSelectMenu = generateSelectMenu(serverQueue.songs.slice(0, 25));
       const newComponents = newSelectMenu ? [newSelectMenu] : [];
       await i.update({ embeds: [newEmbed], components: newComponents });
-      await i.followUp({ content: `✅ ${removedCount}曲をキューから削除しました。`, ephemeral: true });
+      await i.followUp({ content: `✅ ${removedCount}曲をキューから削除しました。`, flags: MessageFlags.Ephemeral });
     }
   });
   collector.on('end', () => {
@@ -304,7 +306,7 @@ export async function handleNowPlaying(
   serverQueue: ServerQueue | undefined,
 ): Promise<void> {
   if (!serverQueue || serverQueue.songs.length === 0) {
-    await interaction.reply({ embeds: [new CustomEmbed().setDescription('再生中の曲はありません。')], ephemeral: true });
+    await interaction.reply({ embeds: [new CustomEmbed().setDescription('再生中の曲はありません。')], flags: MessageFlags.Ephemeral });
     return;
   }
   const song = serverQueue.songs[0];
@@ -317,11 +319,11 @@ export async function handlePause(
   serverQueue: ServerQueue | undefined,
 ): Promise<void> {
   if (!serverQueue?.player) {
-    await interaction.reply({ embeds: [new CustomEmbed().setDescription('再生中の曲はありません。')], ephemeral: true });
+    await interaction.reply({ embeds: [new CustomEmbed().setDescription('再生中の曲はありません。')], flags: MessageFlags.Ephemeral });
     return;
   }
   if (serverQueue.player.state.status === AudioPlayerStatus.Paused) {
-    await interaction.reply({ embeds: [new CustomEmbed().setDescription('既に一時停止しています。')], ephemeral: true });
+    await interaction.reply({ embeds: [new CustomEmbed().setDescription('既に一時停止しています。')], flags: MessageFlags.Ephemeral });
     return;
   }
   serverQueue.player.pause();
@@ -333,11 +335,11 @@ export async function handleResume(
   serverQueue: ServerQueue | undefined,
 ): Promise<void> {
   if (!serverQueue?.player) {
-    await interaction.reply({ embeds: [new CustomEmbed().setDescription('再生中の曲はありません。')], ephemeral: true });
+    await interaction.reply({ embeds: [new CustomEmbed().setDescription('再生中の曲はありません。')], flags: MessageFlags.Ephemeral });
     return;
   }
   if (serverQueue.player.state.status === AudioPlayerStatus.Playing) {
-    await interaction.reply({ embeds: [new CustomEmbed().setDescription('既に再生中です。')], ephemeral: true });
+    await interaction.reply({ embeds: [new CustomEmbed().setDescription('既に再生中です。')], flags: MessageFlags.Ephemeral });
     return;
   }
   serverQueue.player.unpause();
@@ -349,7 +351,7 @@ export async function handleVolume(
   serverQueue: ServerQueue | undefined,
 ): Promise<void> {
   if (!serverQueue) {
-    await interaction.reply({ embeds: [new CustomEmbed().setDescription('再生中の曲はありません。')], ephemeral: true });
+    await interaction.reply({ embeds: [new CustomEmbed().setDescription('再生中の曲はありません。')], flags: MessageFlags.Ephemeral });
     return;
   }
   const volumeLevel = interaction.options.getInteger('level');
@@ -359,7 +361,7 @@ export async function handleVolume(
     return;
   }
   if (volumeLevel < 1 || volumeLevel > 200) {
-    await interaction.reply({ embeds: [new CustomEmbed().setDescription('音量は1から200の間で設定してください。')], ephemeral: true });
+    await interaction.reply({ embeds: [new CustomEmbed().setDescription('音量は1から200の間で設定してください。')], flags: MessageFlags.Ephemeral });
     return;
   }
   serverQueue.volume = volumeLevel / 100;
@@ -376,7 +378,7 @@ export async function handleFilter(
   serverQueue: ServerQueue | undefined,
 ): Promise<void> {
   if (!serverQueue) {
-    await interaction.reply({ embeds: [new CustomEmbed().setDescription('再生中の曲はありません。')], ephemeral: true });
+    await interaction.reply({ embeds: [new CustomEmbed().setDescription('再生中の曲はありません。')], flags: MessageFlags.Ephemeral });
     return;
   }
   serverQueue.currentFilter = interaction.options.getString('effect') as ServerQueue['currentFilter'];

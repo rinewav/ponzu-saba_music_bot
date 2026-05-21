@@ -6,6 +6,7 @@ import {
   AudioPlayerStatus,
 } from '@discordjs/voice';
 import type { Guild, TextChannel, ChatInputCommandInteraction, StringSelectMenuInteraction, GuildMember } from 'discord.js';
+import { MessageFlags } from 'discord.js';
 import { create as createYtdlp } from 'yt-dlp-exec';
 import dotenv from 'dotenv';
 dotenv.config();
@@ -377,7 +378,7 @@ async function downloadWorker(sq: ServerQueue): Promise<void> {
   }
 }
 
-interface VideoData {
+export interface VideoData {
   title?: string;
   webpage_url: string;
   uploader?: string;
@@ -397,7 +398,7 @@ export async function processSongs(
     if (interaction.deferred || interaction.replied) {
       await interaction.editReply({ embeds: [new CustomEmbed().setColor(0xFF0000).setDescription('VCに参加してください。')] });
     } else {
-      await interaction.reply({ embeds: [new CustomEmbed().setColor(0xFF0000).setDescription('VCに参加してください。')], ephemeral: true });
+      await interaction.reply({ embeds: [new CustomEmbed().setColor(0xFF0000).setDescription('VCに参加してください。')], flags: MessageFlags.Ephemeral });
     }
     return;
   }

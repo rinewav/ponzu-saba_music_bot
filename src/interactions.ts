@@ -2,12 +2,12 @@ import type {
   MessageComponentInteraction,
   StringSelectMenuInteraction,
 } from 'discord.js';
+import { MessageFlags } from 'discord.js';
 import { AudioPlayerStatus } from '@discordjs/voice';
 import { create as createYtdlp } from 'yt-dlp-exec';
 const ytdlp = createYtdlp(process.env.YTDLP_PATH || 'yt-dlp');
-import type { Song } from './types.js';
 import { queue } from './state.js';
-import { processSongs, playSong } from './player.js';
+import { processSongs, playSong, type VideoData } from './player.js';
 import { createPlayerControlButtons } from './ui.js';
 
 export async function handleComponent(interaction: MessageComponentInteraction): Promise<void> {
@@ -17,14 +17,14 @@ export async function handleComponent(interaction: MessageComponentInteraction):
     if (interaction.customId === 'play-track-select') {
       const selectInteraction = interaction as StringSelectMenuInteraction;
       await selectInteraction.deferUpdate();
-      const videoInfo = await ytdlp(selectInteraction.values[0], { dumpJson: true }) as unknown;
-      await processSongs(selectInteraction, [videoInfo as Song]);
+      const videoInfo = await ytdlp(selectInteraction.values[0], { dumpJson: true }) as VideoData;
+      await processSongs(selectInteraction, [videoInfo]);
       return;
     }
 
     if (interaction.customId.startsWith('control-')) {
       if (!serverQueue?.player) {
-        await interaction.reply({ content: '現在操作できる曲がありません。', ephemeral: true });
+        await interaction.reply({ content: '現在操作できる曲がありません。', flags: MessageFlags.Ephemeral });
         return;
       }
 
@@ -57,7 +57,9 @@ export async function handleComponent(interaction: MessageComponentInteraction):
   } catch (e) {
     console.error('コンポーネント処理エラー:', e);
     if (!interaction.replied && !interaction.deferred) {
-      await interaction.followUp({ content: 'エラーが発生しました。', ephemeral: true }).catch(() => {});
+      await interaction.reply({ content: 'エラーが発生しました。', flags: MessageFlags.Ephemeral }).catch(() => {});
+    } else {
+      await interaction.followUp({ content: 'エラーが発生しました。', flags: MessageFlags.Ephemeral }).catch(() => {});
     }
   }
 }
