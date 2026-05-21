@@ -46,7 +46,7 @@ export function createNowPlayingEmbed(
     .setColor(0x0099ff)
     .setTitle('🎶 再生中')
     .setDescription(`[${song.title}](${song.url})`)
-    .setThumbnail(song.thumbnail)
+    .setThumbnail(song.thumbnail && song.thumbnail.startsWith('http') ? song.thumbnail : null)
     .addFields(
       { name: '長さ', value: song.duration_string, inline: true },
       { name: '再生したひと', value: song.requestedBy.toString(), inline: true },

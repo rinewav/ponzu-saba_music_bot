@@ -4,6 +4,10 @@ import {
   joinVoiceChannel,
   getVoiceConnection,
   AudioPlayerStatus,
+  VoiceConnectionStatus,
+  VoiceConnectionDisconnectReason,
+  entersState,
+  type VoiceConnection,
 } from '@discordjs/voice';
 import type { Guild, TextChannel, ChatInputCommandInteraction, StringSelectMenuInteraction, GuildMember } from 'discord.js';
 import { MessageFlags } from 'discord.js';
@@ -29,6 +33,37 @@ export function setStatusCallback(cb: StatusCallback): void {
   onStatusChange = cb;
 }
 
+export function setupConnectionHandlers(connection: VoiceConnection, guildId: string): void {
+  connection.on('error', (err) => {
+    console.error(`VoiceConnection エラー (GuildID: ${guildId}):`, err.message);
+  });
+  connection.on(VoiceConnectionStatus.Disconnected, async (_oldState, newState) => {
+    try {
+      if (
+        newState.reason === VoiceConnectionDisconnectReason.WebSocketClose &&
+        newState.closeCode === 4014
+      ) {
+        await entersState(connection, VoiceConnectionStatus.Connecting, 5_000);
+      } else {
+        await Promise.race([
+          entersState(connection, VoiceConnectionStatus.Signalling, 5_000),
+          entersState(connection, VoiceConnectionStatus.Connecting, 5_000),
+        ]);
+      }
+    } catch {
+      console.warn(`VC再接続失敗 (GuildID: ${guildId}). 接続破棄します。`);
+      try { connection.destroy(); } catch {}
+    }
+  });
+}
+
+function setupPlayerErrorHandler(sq: ServerQueue, guildId: string): void {
+  sq.player.removeAllListeners('error');
+  sq.player.on('error', (err) => {
+    console.error(`AudioPlayer エラー (GuildID: ${guildId}):`, err.message);
+  });
+}
+
 function killStreamProcess(sq: ServerQueue): void {
   if (sq.streamProcess && !sq.streamProcess.killed) {
     try {
@@ -51,7 +86,6 @@ async function startStreamPlayback(guild: Guild, song: Song, textChannel: TextCh
     retries: 10,
     fragmentRetries: 10,
     hlsPreferNative: true,
-    buffer: false,
   };
 
   if (isRetry) {
@@ -114,6 +148,53 @@ async function playSong(guild: Guild, song: Song | undefined, textChannel: TextC
   const sq = serverQueue!;
 
   const isLive = song.is_live;
+
+  sq.player.removeAllListeners(AudioPlayerStatus.Idle);
+  sq.player.on(AudioPlayerStatus.Idle, () => {
+    if (sq.progressInterval) clearInterval(sq.progressInterval);
+    if (sq.lyricsInterval) clearInterval(sq.lyricsInterval);
+    if (sq.nowPlayingMessage) sq.nowPlayingMessage.delete().catch(() => {});
+    if (sq.lyricsMessage) sq.lyricsMessage.delete().catch(() => {});
+
+    const finishedSong = sq.songs[0];
+    const wasLive = finishedSong && finishedSong.is_live;
+    if (finishedSong?.filePath && fs.existsSync(finishedSong.filePath)) {
+      try {
+        fs.unlinkSync(finishedSong.filePath);
+      } catch (e) {
+        console.error('一時ファイルの削除に失敗:', e);
+      }
+    }
+    sq.songs.shift();
+
+    if (sq.stopped) {
+      sq.stopped = false;
+      killStreamProcess(sq);
+      return;
+    }
+
+    if (wasLive && !sq.isStreamReconnecting) {
+      sq.isStreamReconnecting = true;
+      console.log(`ライブ配信が切断されました。5秒後に再接続します: ${finishedSong!.title}`);
+      sq.textChannel?.send({ embeds: [new CustomEmbed().setColor(0xFFFF00).setDescription(`ライブ配信が切断されました。5秒後に再接続します: [${finishedSong!.title}](${finishedSong!.url})`)] }).catch(() => {});
+      setTimeout(() => {
+        sq.isStreamReconnecting = false;
+        const reconnectedSong: Song = {
+          ...finishedSong!,
+          status: 'queued',
+          filePath: null,
+          lufs: null,
+          lyrics: null,
+        };
+        sq.songs.unshift(reconnectedSong);
+        playSong(guild, sq.songs[0], sq.textChannel ?? textChannel);
+      }, 5000);
+      return;
+    }
+
+    killStreamProcess(sq);
+    playSong(guild, sq.songs[0], sq.textChannel ?? textChannel);
+  });
 
   if (!isLive && song.status === 'downloading' && song.downloadPromise) {
     sq.currentMode = 'ダウンロード';
@@ -259,53 +340,6 @@ async function playSong(guild: Guild, song: Song | undefined, textChannel: TextC
   if (!isLive) {
     downloadWorker(sq);
   }
-
-  sq.player.removeAllListeners(AudioPlayerStatus.Idle);
-  sq.player.on(AudioPlayerStatus.Idle, () => {
-    if (sq.progressInterval) clearInterval(sq.progressInterval);
-    if (sq.lyricsInterval) clearInterval(sq.lyricsInterval);
-    if (sq.nowPlayingMessage) sq.nowPlayingMessage.delete().catch(() => {});
-    if (sq.lyricsMessage) sq.lyricsMessage.delete().catch(() => {});
-
-    const finishedSong = sq.songs[0];
-    const wasLive = finishedSong && finishedSong.is_live;
-    if (finishedSong?.filePath && fs.existsSync(finishedSong.filePath)) {
-      try {
-        fs.unlinkSync(finishedSong.filePath);
-      } catch (e) {
-        console.error('一時ファイルの削除に失敗:', e);
-      }
-    }
-    sq.songs.shift();
-
-    if (sq.stopped) {
-      sq.stopped = false;
-      killStreamProcess(sq);
-      return;
-    }
-
-    if (wasLive && !sq.isStreamReconnecting) {
-      sq.isStreamReconnecting = true;
-      console.log(`ライブ配信が切断されました。5秒後に再接続します: ${finishedSong!.title}`);
-      sq.textChannel?.send({ embeds: [new CustomEmbed().setColor(0xFFFF00).setDescription(`ライブ配信が切断されました。5秒後に再接続します: [${finishedSong!.title}](${finishedSong!.url})`)] }).catch(() => {});
-      setTimeout(() => {
-        sq.isStreamReconnecting = false;
-        const reconnectedSong: Song = {
-          ...finishedSong!,
-          status: 'queued',
-          filePath: null,
-          lufs: null,
-          lyrics: null,
-        };
-        sq.songs.unshift(reconnectedSong);
-        playSong(guild, sq.songs[0], sq.textChannel ?? textChannel);
-      }, 5000);
-      return;
-    }
-
-    killStreamProcess(sq);
-    playSong(guild, sq.songs[0], sq.textChannel ?? textChannel);
-  });
 
   const components = createPlayerControlButtons(sq.player.state.status);
   const nowPlayingEmbed = createNowPlayingEmbed(song, guild.id);
@@ -469,9 +503,10 @@ export async function processSongs(
       guildId: interaction.guildId!,
       adapterCreator: interaction.guild!.voiceAdapterCreator,
     });
-    serverQueue.connection.on('error', console.error);
+    setupConnectionHandlers(serverQueue.connection, interaction.guildId!);
     serverQueue.connection.subscribe(serverQueue.player);
   }
+  setupPlayerErrorHandler(serverQueue, interaction.guildId!);
 
   downloadWorker(serverQueue);
   if (wasQueueEmpty) {

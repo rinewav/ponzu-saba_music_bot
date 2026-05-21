@@ -17,7 +17,7 @@ import { queue, setInstanceIndex, initVolumeSettings, saveVcState, deleteVcState
 import { commands, handlePlay, handleSkip, handleStop, handleQueue, handleNowPlaying, handlePause, handleResume, handleVolume, handleFilter, handleReload, handleModalSubmit } from './commands.js';
 import { handleComponent } from './interactions.js';
 import { sendToParent, onParentMessage } from './ipc.js';
-import { setStatusCallback, playSong, gracefulShutdown } from './player.js';
+import { setStatusCallback, playSong, gracefulShutdown, setupConnectionHandlers } from './player.js';
 import CustomEmbed from './lib/defaultEmbed.js';
 import dotenv from 'dotenv';
 import { create as createYtdlp } from 'yt-dlp-exec';
@@ -128,6 +128,11 @@ function startBot(config: BotConfig, guild: string, instanceIdx: number): void {
             serverQueue.textChannel = textChannel;
 
             queue.set(gid, serverQueue);
+            setupConnectionHandlers(connection, gid);
+            serverQueue.player.removeAllListeners('error');
+            serverQueue.player.on('error', (err) => {
+              console.error(`AudioPlayer エラー (GuildID: ${gid}):`, err.message);
+            });
             connection.subscribe(serverQueue.player);
 
             if (saved) {
