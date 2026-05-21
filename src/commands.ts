@@ -14,7 +14,8 @@ const ytdlp = createYtdlp(process.env.YTDLP_PATH || 'yt-dlp');
 const ytdlpExec = ytdlp.exec;
 import type { ServerQueue, Song } from './types.js';
 import { queue, volumeSettings, saveVolumeSettings, clearPlaybackState } from './state.js';
-import { processSongs, type VideoData } from './player.js';
+import { processSongs, playSong, type VideoData } from './player.js';
+import type { TextChannel } from 'discord.js';
 import { createPlayerControlButtons, createNowPlayingEmbed } from './ui.js';
 import CustomEmbed from './lib/defaultEmbed.js';
 import type {
@@ -188,8 +189,48 @@ export async function handleSkip(
     await interaction.reply({ embeds: [new CustomEmbed().setDescription('スキップする曲がありません。')], flags: MessageFlags.Ephemeral });
     return;
   }
-  serverQueue.player.stop();
+  const status = serverQueue.player.state.status;
+  const isPlayingLike =
+    status === AudioPlayerStatus.Playing ||
+    status === AudioPlayerStatus.Buffering ||
+    status === AudioPlayerStatus.Paused ||
+    status === AudioPlayerStatus.AutoPaused;
+
+  if (isPlayingLike) {
+    serverQueue.player.stop();
+    await interaction.reply({ embeds: [new CustomEmbed().setDescription('曲をスキップしました。')] });
+    return;
+  }
+
+  serverQueue.skipping = true;
+  if (serverQueue.activeDownload && !serverQueue.activeDownload.killed) {
+    try { serverQueue.activeDownload.kill('SIGKILL'); } catch { try { serverQueue.activeDownload.kill(); } catch {} }
+  }
+  if (serverQueue.streamProcess && !serverQueue.streamProcess.killed) {
+    try { serverQueue.streamProcess.kill('SIGKILL'); } catch { try { serverQueue.streamProcess.kill(); } catch {} }
+  }
+  if (serverQueue.progressInterval) clearInterval(serverQueue.progressInterval);
+  if (serverQueue.lyricsInterval) clearInterval(serverQueue.lyricsInterval);
+  if (serverQueue.nowPlayingMessage) {
+    await serverQueue.nowPlayingMessage.delete().catch(() => {});
+    serverQueue.nowPlayingMessage = null;
+  }
+  if (serverQueue.lyricsMessage) {
+    await serverQueue.lyricsMessage.delete().catch(() => {});
+    serverQueue.lyricsMessage = null;
+  }
+  const finished = serverQueue.songs.shift();
+  if (finished?.filePath && fs.existsSync(finished.filePath)) {
+    try { fs.unlinkSync(finished.filePath); } catch {}
+  }
   await interaction.reply({ embeds: [new CustomEmbed().setDescription('曲をスキップしました。')] });
+  await new Promise(r => setTimeout(r, 100));
+  serverQueue.skipping = false;
+  const next = serverQueue.songs[0];
+  if (next) {
+    const tc = (serverQueue.textChannel ?? interaction.channel) as TextChannel;
+    playSong(interaction.guild!, next, tc);
+  }
 }
 
 export async function handleStop(
@@ -222,6 +263,12 @@ export async function handleStop(
     }
   });
   serverQueue.stopped = true;
+  if (serverQueue.activeDownload && !serverQueue.activeDownload.killed) {
+    try { serverQueue.activeDownload.kill('SIGKILL'); } catch { try { serverQueue.activeDownload.kill(); } catch {} }
+  }
+  if (serverQueue.streamProcess && !serverQueue.streamProcess.killed) {
+    try { serverQueue.streamProcess.kill('SIGKILL'); } catch { try { serverQueue.streamProcess.kill(); } catch {} }
+  }
   serverQueue.songs = [];
   serverQueue.player.stop();
   clearPlaybackState(interaction.guildId!);

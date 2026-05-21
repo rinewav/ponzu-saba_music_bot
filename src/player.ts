@@ -266,7 +266,8 @@ async function playSong(guild: Guild, song: Song | undefined, textChannel: TextC
         progress: true,
         newline: true,
         progressTemplate: 'download:PROGRESS:%(progress._percent_str)s',
-      } as Record<string, unknown>);
+      } as Record<string, unknown>) as ExecaChildProcess;
+      sq.activeDownload = ytdlpProcess;
       if (!ytdlpProcess.stdout) throw new Error('ダウンロードプロセスのstdoutが取得できません。');
       const rl = readline.createInterface({ input: ytdlpProcess.stdout });
       rl.on('line', (line: string) => {
@@ -285,6 +286,12 @@ async function playSong(guild: Guild, song: Song | undefined, textChannel: TextC
         }
       });
       await ytdlpProcess;
+      sq.activeDownload = null;
+      if (sq.stopped || sq.skipping) {
+        await progressMessage.delete().catch(() => {});
+        if (fs.existsSync(opusFilePath)) { try { fs.unlinkSync(opusFilePath); } catch {} }
+        return;
+      }
       const finalProgressBar = ':green_square:'.repeat(10);
       progressEmbed.setTitle('ダウンロード完了！').setDescription(`${finalProgressBar}(100%)`);
       await progressMessage.edit({ embeds: [progressEmbed] }).catch(() => {});
@@ -293,6 +300,12 @@ async function playSong(guild: Guild, song: Song | undefined, textChannel: TextC
       song.filePath = opusFilePath;
       setTimeout(() => progressMessage.delete().catch(() => {}), 1500);
     } catch (downloadError) {
+      sq.activeDownload = null;
+      if (sq.stopped || sq.skipping) {
+        await progressMessage.delete().catch(() => {});
+        if (fs.existsSync(opusFilePath)) { try { fs.unlinkSync(opusFilePath); } catch {} }
+        return;
+      }
       const err = downloadError as Error;
       console.error('ダウンロードエラー:', err.message, err.stack);
       progressMessage.delete().catch(() => {});
@@ -416,10 +429,18 @@ export interface VideoData {
   title?: string;
   webpage_url: string;
   uploader?: string;
-  duration: number;
-  duration_string?: string;
-  is_live: boolean;
-  thumbnail?: string;
+  duration: number | null;
+  duration_string?: string | null;
+  is_live: boolean | null;
+  live_status?: string | null;
+  thumbnail?: string | null;
+}
+
+function detectIsLive(video: VideoData): boolean {
+  if (video.is_live === true) return true;
+  if (video.live_status === 'is_live' || video.live_status === 'post_live') return true;
+  if (video.duration == null && video.is_live !== false) return true;
+  return false;
 }
 
 export async function processSongs(
@@ -440,14 +461,15 @@ export async function processSongs(
   const songs: Song[] = [];
   for (const video of videoData) {
     if (!video?.title) continue;
+    const isLive = detectIsLive(video);
     songs.push({
       title: video.title,
       webpage_url: video.webpage_url,
       url: video.webpage_url,
       uploader: video.uploader ?? 'Unknown',
-      duration: video.duration,
-      duration_string: video.duration_string ?? 'N/A',
-      is_live: video.is_live,
+      duration: video.duration ?? 0,
+      duration_string: video.duration_string ?? (isLive ? 'LIVE' : 'N/A'),
+      is_live: isLive,
       thumbnail: video.thumbnail ?? '',
       requestedBy: interaction.user,
       status: 'queued',
@@ -475,7 +497,9 @@ export async function processSongs(
       lyricsMessage: null,
       resource: null,
       stopped: false,
+      skipping: false,
       streamProcess: null,
+      activeDownload: null,
       isStreamReconnecting: false,
       isDownloading: false,
     };

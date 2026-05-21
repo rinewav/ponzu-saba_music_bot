@@ -17,7 +17,7 @@ import { queue, setInstanceIndex, initVolumeSettings, saveVcState, deleteVcState
 import { commands, handlePlay, handleSkip, handleStop, handleQueue, handleNowPlaying, handlePause, handleResume, handleVolume, handleFilter, handleReload, handleModalSubmit } from './commands.js';
 import { handleComponent } from './interactions.js';
 import { sendToParent, onParentMessage } from './ipc.js';
-import { setStatusCallback, playSong, gracefulShutdown, setupConnectionHandlers } from './player.js';
+import { setStatusCallback, playSong, gracefulShutdown, setupConnectionHandlers, type VideoData } from './player.js';
 import CustomEmbed from './lib/defaultEmbed.js';
 import dotenv from 'dotenv';
 import { create as createYtdlp } from 'yt-dlp-exec';
@@ -111,7 +111,9 @@ function startBot(config: BotConfig, guild: string, instanceIdx: number): void {
               lyricsMessage: null,
               resource: null,
               stopped: false,
+              skipping: false,
               streamProcess: null,
+              activeDownload: null,
               isStreamReconnecting: false,
               isDownloading: false,
             };
@@ -139,16 +141,20 @@ function startBot(config: BotConfig, guild: string, instanceIdx: number): void {
               console.log(`サーバー[${guildObj.name}]の再生状態を復元します: ${saved.title}`);
               try {
                 if (textChannel) {
-                  const videoInfo = await ytdlp(saved.url, { dumpJson: true }) as Record<string, unknown>;
+                  const videoInfo = await ytdlp(saved.url, { dumpJson: true }) as VideoData;
+                  const isLive = Boolean(videoInfo.is_live)
+                    || videoInfo.live_status === 'is_live'
+                    || videoInfo.live_status === 'post_live'
+                    || (videoInfo.duration == null && videoInfo.is_live !== false);
                   const song = {
                     title: (videoInfo.title as string) ?? saved.title,
-                    url: videoInfo.webpage_url as string,
-                    webpage_url: videoInfo.webpage_url as string,
-                    uploader: (videoInfo.uploader as string) ?? 'Unknown',
-                    duration: (videoInfo.duration as number) ?? 0,
-                    duration_string: (videoInfo.duration_string as string) ?? 'N/A',
-                    is_live: (videoInfo.is_live as boolean) ?? false,
-                    thumbnail: (videoInfo.thumbnail as string) ?? '',
+                    url: videoInfo.webpage_url,
+                    webpage_url: videoInfo.webpage_url,
+                    uploader: videoInfo.uploader ?? 'Unknown',
+                    duration: videoInfo.duration ?? 0,
+                    duration_string: videoInfo.duration_string ?? (isLive ? 'LIVE' : 'N/A'),
+                    is_live: isLive,
+                    thumbnail: videoInfo.thumbnail ?? '',
                     requestedBy: client.user!,
                     status: 'queued' as const,
                     filePath: null,

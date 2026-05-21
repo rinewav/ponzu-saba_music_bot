@@ -48,7 +48,9 @@ export interface ServerQueue {
   lyricsMessage: Message<true> | null;
   resource: AudioResource | null;
   stopped: boolean;
+  skipping: boolean;
   streamProcess: import('execa').ExecaChildProcess | null;
+  activeDownload: import('execa').ExecaChildProcess | null;
   isStreamReconnecting: boolean;
   isDownloading: boolean;
 }
